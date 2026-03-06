@@ -87,33 +87,40 @@ class CMSProviderDataRetriever(CSVDownloadHashTracker):
             self.response = None
         sha256_hex = self.sha256.hexdigest()
         download_date = datetime.now(timezone.utc).date().isoformat()
-        if self._check_for_existing_hash(
+        has_existing_hash = self._check_for_existing_hash(
             source_url=self.PROVIDER_DATA_URL,
             sha256=sha256_hex,
-        ):
-            print(f'File with hash {sha256_hex} already tracked for this URL.')
+        )
+        if has_existing_hash:
             existing_local_path = self._latest_local_path_for_hash(
                 source_url=self.PROVIDER_DATA_URL,
                 sha256=sha256_hex,
             )
-            return {
-                'source_url': self.PROVIDER_DATA_URL,
-                'local_path': existing_local_path or str(output_file),
-                'sha256': sha256_hex,
-                'file_size_bytes': self.response_size,
-                'download_date': download_date,
-                'skipped': True,
-            }
+            if existing_local_path:
+                existing_path = Path(existing_local_path)
+                if existing_path.exists() and existing_path.stat().st_size > 0:
+                    print(f'File with hash {sha256_hex} already tracked for this URL.')
+                    return {
+                        'source_url': self.PROVIDER_DATA_URL,
+                        'local_path': str(existing_path),
+                        'sha256': sha256_hex,
+                        'file_size_bytes': self.response_size,
+                        'download_date': download_date,
+                        'skipped': True,
+                    }
+                output_file = existing_path
+                output_file.parent.mkdir(parents=True, exist_ok=True)
         stream_buffer.seek(0)
         normalized = json_normalize(read_csv(stream_buffer).to_dict(orient='records'))
         normalized.rename(columns=self._column_mapper(list(normalized.columns)), inplace=True)
         normalized.to_csv(path_or_buf=output_file, index=False)
-        self._record_download(
-            source_url=self.PROVIDER_DATA_URL,
-            local_path=str(output_file),
-            file_size_bytes=self.response_size,
-            sha256=sha256_hex,
-        )
+        if not has_existing_hash:
+            self._record_download(
+                source_url=self.PROVIDER_DATA_URL,
+                local_path=str(output_file),
+                file_size_bytes=self.response_size,
+                sha256=sha256_hex,
+            )
         return {
             'source_url': self.PROVIDER_DATA_URL,
             'local_path': str(output_file),
