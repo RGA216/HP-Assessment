@@ -1,5 +1,4 @@
 # standard library imports
-from ast import Return
 import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
@@ -71,5 +70,19 @@ class CSVDownloadHashTracker:
                     LIMIT 1
                 ''',
                 (source_url,),
+            ).fetchone()
+        return row[0] if row else None
+
+    def _latest_local_path_for_hash(self, source_url: str, sha256: str):
+        """Return latest local path for a source URL/hash pair, or None when absent."""
+        with sqlite3.connect(self.db_path) as connection:
+            row = connection.execute(
+                ''' SELECT local_path
+                    FROM csv_file_history
+                    WHERE source_url = ? AND sha256 = ?
+                    ORDER BY id DESC
+                    LIMIT 1
+                ''',
+                (source_url, sha256),
             ).fetchone()
         return row[0] if row else None

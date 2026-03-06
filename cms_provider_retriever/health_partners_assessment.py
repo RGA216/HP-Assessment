@@ -90,9 +90,13 @@ class CMSProviderDataRetriever(CSVDownloadHashTracker):
             sha256=sha256_hex,
         ):
             print(f'File with hash {sha256_hex} already tracked for this URL.')
+            existing_local_path = self._latest_local_path_for_hash(
+                source_url=self.PROVIDER_DATA_URL,
+                sha256=sha256_hex,
+            )
             return {
                 'source_url': self.PROVIDER_DATA_URL,
-                'local_path': str(output_file),
+                'local_path': existing_local_path or str(output_file),
                 'sha256': sha256_hex,
                 'file_size_bytes': self.response_size,
                 'download_date': download_date,

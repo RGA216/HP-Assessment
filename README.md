@@ -26,7 +26,6 @@ pip install -r requirements.txt
 python .\cms_provider_retriever\health_partners_assessment.py
 ```
 
-
 ## Output
 
 - CSV written to `output/provider_data_YYYYMMDD.csv`
@@ -43,4 +42,3 @@ python .\cms_provider_retriever\health_partners_assessment.py
 - SHA-256 is computed while streaming for duplicatation check.
 - Data is loaded into pandas, normalized with `json_normalize`, and columns are converted to clean `snake_case`.
 - If the same `source_url` + `sha256` already exists, the run is marked as skipped.
-
