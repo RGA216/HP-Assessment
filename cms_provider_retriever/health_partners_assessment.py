@@ -1,5 +1,6 @@
 # standard library imports
 import hashlib
+import json
 import re
 from datetime import datetime, timezone
 from io import BytesIO
@@ -19,8 +20,11 @@ from requests.exceptions import RequestException
 class CMSProviderDataRetriever(CSVDownloadHashTracker):
 
     PROVIDER_DATA_URL = 'https://data.cms.gov/provider-data/api/1/metastore/schemas/dataset/items'
+    BASE_DIR = Path(__file__).resolve().parent
 
-    def __init__(self, hash_db_path='download_hashes.db'):
+    def __init__(self, hash_db_path=None):
+        if hash_db_path is None:
+            hash_db_path = self.BASE_DIR / 'download_hashes.db'
         super().__init__(hash_db_path)
         self.session = Session()
         self.sha256 = None
@@ -47,6 +51,42 @@ class CMSProviderDataRetriever(CSVDownloadHashTracker):
         date_suffix = datetime.now(timezone.utc).strftime('%Y%m%d')
         extension = target.suffix if target.suffix else '.csv'
         return target.with_name(f'{target.stem}_{date_suffix}{extension}')
+
+    def _resolve_tracked_path(self, tracked_path):
+        """Resolve relative tracked paths predictably across working directories."""
+        candidate = Path(tracked_path)
+        if candidate.is_absolute():
+            return candidate
+        base_candidate = (self.BASE_DIR / candidate).resolve()
+        if base_candidate.exists():
+            return base_candidate
+        return candidate.resolve()
+
+    def _is_valid_written_csv(self, csv_path):
+        """Treat files with no data rows as invalid cached outputs."""
+        if not csv_path.exists() or csv_path.stat().st_size == 0:
+            return False
+        try:
+            sample = read_csv(csv_path, nrows=1)
+        except Exception:
+            return False
+        return (len(sample.columns) > 0) and (not sample.empty)
+
+    def _parse_downloaded_payload(self, stream_buffer):
+        """Parse JSON payload from CMS metadata endpoint."""
+        payload_bytes = stream_buffer.getvalue()
+        try:
+            payload = json.loads(payload_bytes.decode('utf-8'))
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            return None
+
+        if isinstance(payload, list):
+            return json_normalize(payload)
+        if isinstance(payload, dict):
+            if isinstance(payload.get('data'), list):
+                return json_normalize(payload['data'])
+            return json_normalize([payload])
+        return None
 
     def stream_data(self):
         """Stream response content while updating SHA-256 state."""
@@ -97,8 +137,8 @@ class CMSProviderDataRetriever(CSVDownloadHashTracker):
                 sha256=sha256_hex,
             )
             if existing_local_path:
-                existing_path = Path(existing_local_path)
-                if existing_path.exists() and existing_path.stat().st_size > 0:
+                existing_path = self._resolve_tracked_path(existing_local_path)
+                if self._is_valid_written_csv(existing_path):
                     print(f'File with hash {sha256_hex} already tracked for this URL.')
                     return {
                         'source_url': self.PROVIDER_DATA_URL,
@@ -110,20 +150,22 @@ class CMSProviderDataRetriever(CSVDownloadHashTracker):
                     }
                 output_file = existing_path
                 output_file.parent.mkdir(parents=True, exist_ok=True)
-        stream_buffer.seek(0)
-        normalized = json_normalize(read_csv(stream_buffer).to_dict(orient='records'))
+        normalized = self._parse_downloaded_payload(stream_buffer)
+        if normalized is None or normalized.empty:
+            print('No JSON rows parsed from downloaded payload; skipping file write.')
+            return None
         normalized.rename(columns=self._column_mapper(list(normalized.columns)), inplace=True)
         normalized.to_csv(path_or_buf=output_file, index=False)
         if not has_existing_hash:
             self._record_download(
                 source_url=self.PROVIDER_DATA_URL,
-                local_path=str(output_file),
+                local_path=str(output_file.resolve()),
                 file_size_bytes=self.response_size,
                 sha256=sha256_hex,
             )
         return {
             'source_url': self.PROVIDER_DATA_URL,
-            'local_path': str(output_file),
+            'local_path': str(output_file.resolve()),
             'sha256': sha256_hex,
             'file_size_bytes': self.response_size,
             'download_date': download_date,
@@ -133,7 +175,8 @@ class CMSProviderDataRetriever(CSVDownloadHashTracker):
     def main(self):
         """Main method to download and track the provider CSV."""
         try:
-            result = self.download_csv_and_track(output_path='output/provider_data.csv')
+            output_path = self.BASE_DIR / 'output' / 'provider_data.csv'
+            result = self.download_csv_and_track(output_path=output_path)
             print(result)
             return result
         finally:
