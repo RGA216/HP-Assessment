@@ -42,3 +42,28 @@ python .\cms_provider_retriever\health_partners_assessment.py
 - SHA-256 is computed while streaming for duplicatation check.
 - Data is loaded into pandas, normalized with `json_normalize`, and columns are converted to clean `snake_case`.
 - If the same `source_url` + `sha256` already exists, the run is marked as skipped.
+- Optionally (don't actually do this) set a local scheduled task to run the process daily on your local machine.
+
+## Suggested Daily Scheduling
+
+Use the machine-specific scheduler and run the same command once per day (not ideal, but it would work)
+Replace `<PROJECT_DIR>` and `<PYTHON_CMD>` with values for the local machine.
+
+Command to schedule:
+```text
+cd <PROJECT_DIR> && <PYTHON_CMD> ./cms_provider_retriever/health_partners_assessment.py
+```
+
+Windows (Task Scheduler via CLI):
+```powershell
+schtasks /Create /SC DAILY /ST 06:00 /TN "CMS Provider Download" /TR "cmd /c cd /d <PROJECT_DIR> && <PYTHON_CMD> .\cms_provider_retriever\health_partners_assessment.py"
+```
+
+Linux (cron):
+```bash
+crontab -e
+```
+Add:
+```cron
+0 6 * * * cd <PROJECT_DIR> && <PYTHON_CMD> ./cms_provider_retriever/health_partners_assessment.py >> ./cms_provider_retriever/output/job.log 2>&1
+```
