@@ -17,7 +17,7 @@ Install dependencies:
 Linux:
 ```bash
 pip install -r requirements.txt
-python .\\cms_provider_retriever\\health_partners_assessment.py
+python ./cms_provider_retriever/health_partners_assessment.py
 ```
 
 Windows:
