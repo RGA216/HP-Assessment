@@ -73,13 +73,16 @@ class CMSProviderDataRetriever(CSVDownloadHashTracker):
                 stream=True,
                 timeout=120,
             ) as response:
+                # set class attribute response for use in stream_data and
+                # post-download processing so that only the responses
+                # created in this class are able to be used.
                 self.response = response
                 self.response.raise_for_status()
                 for chunk in self.stream_data():
                     stream_buffer.write(chunk)
         except RequestException as error:
             print(f'An error occurred while downloading CSV data: {error}')
-            return None
+            return
         finally:
             self.response = None
         sha256_hex = self.sha256.hexdigest()
