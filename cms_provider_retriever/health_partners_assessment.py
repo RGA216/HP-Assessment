@@ -75,7 +75,6 @@ class CMSProviderDataRetriever(CSVDownloadHashTracker):
             ) as response:
                 self.response = response
                 self.response.raise_for_status()
-
                 for chunk in self.stream_data():
                     stream_buffer.write(chunk)
         except RequestException as error:
