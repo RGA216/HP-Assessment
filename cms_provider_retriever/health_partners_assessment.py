@@ -78,15 +78,14 @@ class CMSProviderDataRetriever(CSVDownloadHashTracker):
         try:
             payload = json.loads(payload_bytes.decode('utf-8'))
         except (UnicodeDecodeError, json.JSONDecodeError):
-            return None
-
+            return
         if isinstance(payload, list):
             return json_normalize(payload)
         if isinstance(payload, dict):
             if isinstance(payload.get('data'), list):
                 return json_normalize(payload['data'])
             return json_normalize([payload])
-        return None
+        return
 
     def stream_data(self):
         """Stream response content while updating SHA-256 state."""
@@ -153,7 +152,7 @@ class CMSProviderDataRetriever(CSVDownloadHashTracker):
         normalized = self._parse_downloaded_payload(stream_buffer)
         if normalized is None or normalized.empty:
             print('No JSON rows parsed from downloaded payload; skipping file write.')
-            return None
+            return
         normalized.rename(columns=self._column_mapper(list(normalized.columns)), inplace=True)
         normalized.to_csv(path_or_buf=output_file, index=False)
         if not has_existing_hash:
